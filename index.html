@@ -2,287 +2,207 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
-  <title>Kamera Presensi SIAL</title>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIAL-absenSI - Kamera</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
+    * { box-sizing: border-box; }
     body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f3f4f6;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      margin: 0; min-height: 100vh; padding: 16px;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #0f172a; color: #fff;
+      display: flex; align-items: center; justify-content: center;
     }
-
-    .container {
-      width: 100%;
-      max-width: 480px;
-      background: white;
-      border-radius: 18px;
-      padding: 20px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.15);
-    }
-
-    h2 {
-      text-align: center;
-      margin-top: 0;
-    }
-
-    video {
-      width: 100%;
-      aspect-ratio: 3 / 4;
-      object-fit: cover;
+    .card {
+      width: min(100%, 460px);
       background: #111827;
-      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      overflow: hidden;
     }
+    .head { padding: 18px 18px 12px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .muted { font-size: 12px; color: #9ca3af; }
 
+    .stage {
+      margin: 0 16px 16px;
+      aspect-ratio: 3 / 4;
+      min-height: 320px;
+      max-height: 620px;
+      background: #000;
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid #334155;
+    }
+    video {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+      transform: scaleX(-1);
+      background: #000;
+    }
+    .guide {
+      position: absolute;
+      inset: 10% 10%;
+      border: 2px dashed rgba(255,255,255,.65);
+      border-radius: 45% 45% 42% 42%;
+      pointer-events: none;
+    }
+    .status {
+      position: absolute;
+      left: 12px; right: 12px; bottom: 12px;
+      background: rgba(15,23,42,.78);
+      border: 1px solid rgba(255,255,255,.14);
+      padding: 10px 12px; border-radius: 12px;
+      font-size: 12px; text-align: center;
+    }
+    .success { color: #86efac; }
+    .error { color: #fda4af; }
+
+    .controls { padding: 0 16px 18px; display: grid; gap: 10px; }
     button {
-      width: 100%;
-      padding: 14px;
-      margin-top: 12px;
-      border: 0;
-      border-radius: 10px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
+      border: 0; border-radius: 12px; padding: 12px 14px;
+      font-weight: 700; font-size: 14px; cursor: pointer;
+      background: #2563eb; color: #fff;
     }
-
-    #startCamera {
-      background: #2563eb;
-      color: white;
-    }
-
-    #capture {
-      background: #16a34a;
-      color: white;
-    }
-
-    #closeCamera {
-      background: #dc2626;
-      color: white;
-    }
-
-    #status {
-      text-align: center;
-      margin: 12px 0;
-      font-size: 14px;
-    }
-
-    canvas {
-      display: none;
+    button.secondary { background: #334155; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .hint {
+      font-size: 11px; line-height: 1.5;
+      color: #cbd5e1; text-align: center; padding: 0 8px 4px;
     }
   </style>
 </head>
-
 <body>
+  <div class="card">
+    <div class="head">
+      <h1>Verifikasi Wajah & Kamera</h1>
+      <div class="muted">SIAL-absenSI digitAL</div>
+    </div>
 
-<div class="container">
+    <div class="stage">
+      <video id="camera" autoplay muted playsinline></video>
+      <div class="guide"></div>
+      <div id="status" class="status">Menyiapkan kamera…</div>
+    </div>
 
-  <h2>📷 Kamera Presensi</h2>
-
-  <video
-    id="video"
-    autoplay
-    playsinline
-  ></video>
-
-  <div id="status">
-    Tekan tombol untuk mengaktifkan kamera.
+    <div class="controls">
+      <button id="startBtn" type="button">AKTIFKAN KAMERA</button>
+      <button id="stopBtn" type="button" class="secondary" disabled>TUTUP KAMERA</button>
+      <div class="hint">
+        Saat muncul permintaan browser, pilih <b>Izinkan / Allow</b>.
+        Setelah kamera aktif, kembali ke tab aplikasi presensi untuk melanjutkan pengisian absensi.
+      </div>
+    </div>
   </div>
 
-  <button id="startCamera">
-    📷 Aktifkan Kamera
-  </button>
-
-  <button id="capture">
-    📸 Ambil Foto
-  </button>
-
-  <button id="closeCamera">
-    Tutup Kamera
-  </button>
-
-  <canvas id="canvas"></canvas>
-
-</div>
-
 <script>
+(() => {
+  let mediaStream = null;
 
-let stream = null;
+  const video = document.getElementById('camera');
+  const statusEl = document.getElementById('status');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
 
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
+  function setStatus(text, kind = '') {
+    statusEl.textContent = text;
+    statusEl.className = 'status' + (kind ? ' ' + kind : '');
+  }
 
-const statusText =
-  document.getElementById('status');
+  function sendToOpener(message) {
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage(message, '*');
+      }
+    } catch (e) {}
+  }
 
-const startButton =
-  document.getElementById('startCamera');
-
-const captureButton =
-  document.getElementById('capture');
-
-const closeButton =
-  document.getElementById('closeCamera');
-
-
-/* =====================================================
-   AKTIFKAN KAMERA
-   ===================================================== */
-
-async function startCamera() {
-
-  try {
-
-    statusText.textContent =
-      'Meminta izin kamera...';
-
-    if (!navigator.mediaDevices ||
-        !navigator.mediaDevices.getUserMedia) {
-
-      throw new Error(
-        'Browser tidak mendukung akses kamera.'
-      );
+  async function startCamera() {
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+      mediaStream = null;
     }
 
-    stream =
-      await navigator.mediaDevices.getUserMedia({
+    if (!window.isSecureContext) {
+      const msg = 'Halaman kamera harus dibuka melalui HTTPS.';
+      setStatus(msg, 'error');
+      sendToOpener({ type: 'SIAL_CAMERA_ERROR', message: msg });
+      return;
+    }
 
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const msg = 'Browser tidak mendukung akses kamera pada halaman ini.';
+      setStatus(msg, 'error');
+      sendToOpener({ type: 'SIAL_CAMERA_ERROR', message: msg });
+      return;
+    }
+
+    setStatus('Meminta izin kamera…');
+
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: {
-            ideal: 'user'
-          }
+          facingMode: { ideal: 'user' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
         },
-
         audio: false
-
       });
 
-    video.srcObject = stream;
+      video.srcObject = mediaStream;
+      await video.play();
 
-    statusText.textContent =
-      'Kamera aktif. Silakan ambil foto.';
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      setStatus('Kamera aktif. Arahkan wajah ke bingkai.', 'success');
+      sendToOpener({ type: 'SIAL_CAMERA_READY' });
+    } catch (err) {
+      let msg = 'Tidak dapat mengakses kamera.';
+      if (err && err.name === 'NotAllowedError') {
+        msg = 'Izin kamera ditolak atau diblokir. Izinkan Kamera pada pengaturan situs/browser.';
+      } else if (err && err.name === 'NotFoundError') {
+        msg = 'Kamera tidak ditemukan pada perangkat ini.';
+      } else if (err && err.name === 'NotReadableError') {
+        msg = 'Kamera sedang dipakai aplikasi lain. Tutup aplikasi yang sedang memakai kamera.';
+      } else if (err && err.name === 'SecurityError') {
+        msg = 'Browser menolak kamera karena kebijakan keamanan halaman.';
+      }
 
-  } catch (error) {
-
-    console.error(error);
-
-    statusText.textContent =
-      'Kamera tidak dapat digunakan: ' +
-      error.name +
-      ' - ' +
-      error.message;
-
+      setStatus(msg, 'error');
+      sendToOpener({ type: 'SIAL_CAMERA_ERROR', message: msg });
+    }
   }
 
-}
+  function stopCamera(notify = true) {
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+      mediaStream = null;
+    }
 
+    video.srcObject = null;
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    setStatus('Kamera tidak aktif.');
 
-/* =====================================================
-   AMBIL FOTO
-   ===================================================== */
-
-function capturePhoto() {
-
-  if (!stream) {
-
-    alert(
-      'Aktifkan kamera terlebih dahulu.'
-    );
-
-    return;
+    if (notify) {
+      sendToOpener({ type: 'SIAL_CAMERA_STOPPED' });
+    }
   }
 
-  const width =
-    video.videoWidth;
+  startBtn.addEventListener('click', startCamera);
+  stopBtn.addEventListener('click', () => stopCamera(true));
 
-  const height =
-    video.videoHeight;
+  window.addEventListener('message', event => {
+    if (event && event.data && event.data.type === 'SIAL_CAMERA_STOP') {
+      stopCamera(false);
+    }
+  });
 
-  canvas.width = width;
-  canvas.height = height;
-
-  const context =
-    canvas.getContext('2d');
-
-  context.drawImage(
-    video,
-    0,
-    0,
-    width,
-    height
-  );
-
-  const imageData =
-    canvas.toDataURL(
-      'image/jpeg',
-      0.85
-    );
-
-  console.log(imageData);
-
-  alert(
-    'Foto berhasil diambil.'
-  );
-
-}
-
-
-/* =====================================================
-   TUTUP KAMERA
-   ===================================================== */
-
-function closeCamera() {
-
-  if (stream) {
-
-    stream
-      .getTracks()
-      .forEach(track => track.stop());
-
-    stream = null;
-
-  }
-
-  video.srcObject = null;
-
-  statusText.textContent =
-    'Kamera telah ditutup.';
-
-}
-
-
-/* =====================================================
-   EVENT
-   ===================================================== */
-
-startButton.addEventListener(
-  'click',
-  startCamera
-);
-
-captureButton.addEventListener(
-  'click',
-  capturePhoto
-);
-
-closeButton.addEventListener(
-  'click',
-  closeCamera
-);
-
+  // Coba otomatis ketika tab kamera dibuka. Jika browser mensyaratkan
+  // interaksi pengguna, tombol AKTIFKAN KAMERA tetap tersedia.
+  startCamera();
+})();
 </script>
-
 </body>
 </html>
