@@ -23,8 +23,9 @@
       object-fit:cover;
       object-position:50% 50%;
       display:block;background:#000;
-      transform:none !important;
-      -webkit-transform:none !important;
+      /* Balik preview secara horizontal agar tampilan kamera depan tidak mirror. */
+      transform:scaleX(-1) !important;
+      -webkit-transform:scaleX(-1) !important;
     }
 
     /* Bingkai berada tepat di tengah preview. */
@@ -254,12 +255,16 @@
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
-      /* Tidak ada scaleX(-1): foto mengikuti arah asli kamera, bukan mirror. */
+      /* Samakan hasil foto dengan preview yang sudah dibalik agar tidak mirror. */
+      ctx.save();
+      ctx.translate(outputW, 0);
+      ctx.scale(-1, 1);
       ctx.drawImage(
         video,
         cropX, cropY, cropW, cropH,
         0, 0, outputW, outputH
       );
+      ctx.restore();
 
       /* Tetap diproses hanya di memori browser, sama seperti versi sebelumnya. */
       ctx.clearRect(0, 0, canvas.width, canvas.height);
